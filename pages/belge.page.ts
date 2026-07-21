@@ -56,14 +56,48 @@ export class BelgePage {
     await this.page.waitForTimeout(500);
   }
 
+  /** Etiket metnine gore o form-group'taki text input'u/textarea'yi doldurur. */
+  async alanDoldur(etiketRegex: RegExp, deger: string) {
+    const grp = this.page
+      .locator('div.form-group.row, div.form-group', { has: this.page.getByText(etiketRegex) })
+      .first();
+    await grp.locator('input[type="text"], input:not([type]), textarea').first().fill(deger);
+  }
+
+  /** Etiket metnine gore Kendo dropdownlist'in ILK secenegini secer (deger metni bilinmiyorsa). */
+  async dropdownIlkSec(etiketRegex: RegExp) {
+    const grp = this.page
+      .locator('div.form-group.row, div.form-group', { has: this.page.getByText(etiketRegex) })
+      .first();
+    await grp.locator('kendo-dropdownlist').first().click();
+    await this.page.waitForTimeout(500);
+    await this.page
+      .locator('.k-animation-container .k-list-item, .k-popup .k-list-item, [role="option"]')
+      .first()
+      .click();
+    await this.page.waitForTimeout(400);
+  }
+
+  /** Maskeli/Kendo tarih inputu: fill() calismaz, tus tus yaz. */
+  async fillDate(selector: string, value: string) {
+    const input = this.page.locator(selector).first();
+    await input.click();
+    await input.press('Control+a');
+    await input.pressSequentially(value, { delay: 50 });
+    await input.press('Escape');
+  }
+
   // ---------- Alici secimi ----------
 
   /**
    * "Hızlı Müşteri" ile anlik SAHTE alici olusturur (mukellef gerektirmeyen modullerde:
-   * e-Arsiv, Gider Pusulasi, e-Bilet...). Varsayilan "Utkuhan Bulut", TCKN 11111111111.
-   * ÖNEMLI: ad/soyad'da rakam/"Test"/anlamsiz dizi reddedilir -> gercek isim ver.
+   * e-Arsiv, Gider Pusulasi, E-MM...). Varsayilan "Utkuhan Bulut".
+   * ÖNEMLI:
+   *  - Ad/soyad'da rakam/"Test"/anlamsiz dizi reddedilir -> gercek isim.
+   *  - Modalin default TCKN'si 11111111111 CHECKSUM GECERSIZ; e-Arsiv/Gider kabul eder ama
+   *    E-MM/E-Adisyon "TC doğru değil" der -> GECERLI TC (10000000146) yaziyoruz.
    */
-  async hizliMusteriOlustur(ad = 'Utkuhan', soyad = 'Bulut'): Promise<string> {
+  async hizliMusteriOlustur(ad = 'Utkuhan', soyad = 'Bulut', tckn = '10000000146'): Promise<string> {
     await this.page.locator('[role="combobox"]').first().click();
     await this.page.waitForTimeout(400);
     await this.page.keyboard.type('test', { delay: 30 });
@@ -72,9 +106,11 @@ export class BelgePage {
     await this.page.waitForTimeout(1200);
     await this.page.getByPlaceholder('Adı', { exact: true }).fill(ad);
     await this.page.getByPlaceholder('Soyadı', { exact: true }).fill(soyad);
+    // TCKN alani (modaldaki 3. input: Adı, Soyadı, TCKN) -> gecerli TC ile degistir.
+    await this.page.locator('modal-container input, .modal.show input').nth(2).fill(tckn).catch(() => {});
     await this.page.locator('modal-container button:has-text("Oluştur")').first().click();
     // Musteri olusturma ASENKRON; chip (TCKN) forma dusene kadar bekle (yaris kosulu).
-    await expect(this.page.getByText(/TCKN:\s*11111111111/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(this.page.getByText(/TCKN:\s*\d{11}/i).first()).toBeVisible({ timeout: 15_000 });
     await this.page.waitForTimeout(800);
     return `${ad} ${soyad}`;
   }
@@ -143,12 +179,25 @@ export class BelgePage {
     await this.page.waitForTimeout(400);
   }
 
-  /** Ilk kalem satirini doldurur (KDV %0 birakma; default 20). */
+  /** Ilk kalem satirini doldurur (Urun + Fiyat + Miktar + KDV). e-Fatura/e-Arsiv icin. */
   async kalemDoldur(urun: string, birimFiyat: number, miktar = 1, kdv = 20) {
     await this.page.locator('table input[type="text"]').first().fill(urun);
     await this.setGridNumeric(0, birimFiyat);
     await this.setGridNumeric(1, miktar);
     await this.setGridNumeric(3, kdv);
+  }
+
+  /** KDV'siz kalem (Gider Pusulasi vb.): Urun + Fiyat + Miktar. */
+  async kalemDoldurBasit(urun: string, birimFiyat: number, miktar = 1) {
+    await this.page.locator('table input[type="text"]').first().fill(urun);
+    await this.setGridNumeric(0, birimFiyat);
+    await this.setGridNumeric(1, miktar);
+  }
+
+  /** Sadece metin + ilk numeric (E-SMM: Ücretin Nedeni + Brüt Ücret; miktar/net kolonu disabled). */
+  async kalemUrunFiyat(urun: string, tutar: number) {
+    await this.page.locator('table input[type="text"]').first().fill(urun);
+    await this.setGridNumeric(0, tutar);
   }
 
   /** Toplam (Ödenecek/Payable) tutar metni. */
@@ -170,21 +219,50 @@ export class BelgePage {
    */
   async olustur(): Promise<string> {
     await this.dismissCookieBanner(); // banner "Oluştur"un ustune binebiliyor
-    await this.page.getByRole('button', { name: /^Oluştur$/i }).first().click();
+    // Once TAM "Oluştur" (e-Fatura/e-Arsiv — kanitli); yoksa "...Oluştur" (ör. "Makbuz Oluştur").
+    const tam = this.page.getByRole('button', { name: /^Oluştur$/i });
+    const btn = (await tam.count()) > 0 ? tam.last() : this.page.getByRole('button', { name: /Oluştur\s*$/i }).last();
+    await btn.click();
+    // Basari = "başarıyla kaydedildi" metni VEYA ONIZLEME MODALI acildi. E-Adisyon gibi bazi
+    // moduller metinsiz, ETTN'i iframe'de gosteren onizleme aciyor -> action butonlarina bak
+    // (Müşteriye Gönder / Onayla / Yazdır / Mail Gönder / Yeni Fatura Oluştur).
     const basariModal = this.page.getByText(/başarıyla kaydedildi/i).first();
+    const ettnModal = this.page
+      .locator('.modal.show, modal-container, .swal2-popup')
+      .getByRole('button', { name: /Müşteriye Gönder|Mail Gönder|Onayla|Yazdır|Yeni Fatura Oluştur/i })
+      .first();
+    // Bazi moduller (Mutabakat) modal degil BASARI TOAST'i gosterir.
+    const basariToast = this.page
+      .locator('.k-notification-success, .toast-success, .k-notification, .toast')
+      .filter({ hasText: /başarı|kaydedildi|olusturuldu|oluşturuldu|gönderildi/i })
+      .first();
     const hata = this.page
       .locator('.k-notification-error, .toast-error, .validation-message, .text-danger')
       .filter({ hasText: /\S/ })
       .first();
-    const validasyon = this.page.getByText(/Zorunlu alan|Lütfen gerekli alanları/i).first();
+    const validasyon = this.page
+      .getByText(/Zorunlu alan|Lütfen gerekli alanları|greater than zero|doğru değil|geçersiz|invalid/i)
+      .first();
     for (let i = 0; i < 40; i++) {
-      if (await basariModal.isVisible().catch(() => false)) {
+      if (
+        (await basariModal.isVisible().catch(() => false)) ||
+        (await ettnModal.isVisible().catch(() => false)) ||
+        (await basariToast.isVisible().catch(() => false))
+      ) {
         const modalTxt =
           (await this.page.locator('.modal.show, modal-container, .swal2-popup').first().textContent().catch(() => '')) || '';
         return (modalTxt.match(/ETTN:\s*([A-F0-9-]{20,})/i) || [])[1] || '';
       }
       if (i >= 3 && (await validasyon.isVisible().catch(() => false))) {
-        throw new Error('"Oluştur": zorunlu alan bos (ör. Fatura Tipi). Form tam doldurulmali.');
+        // Gercek uyari metnini yakala (tahmin yerine) — ör. "Tax rates must be greater than zero".
+        const parcalar = await this.page
+          .locator('.k-notification, .toast, [class*="notification"]')
+          .allTextContents()
+          .catch(() => []);
+        const uyari = [...new Set(parcalar.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean))]
+          .join(' | ')
+          .slice(0, 200);
+        throw new Error(`"Oluştur" validasyon: ${uyari || 'zorunlu alan bos'}`);
       }
       if (await hata.isVisible().catch(() => false)) {
         throw new Error(`"Oluştur" hatasi: ${((await hata.textContent()) || '').replace(/\s+/g, ' ').trim()}`);
@@ -201,11 +279,16 @@ export class BelgePage {
    */
   async musteriyeGonder(): Promise<boolean> {
     await this.dismissCookieBanner();
-    await this.page
+    // Buton metni module gore degisebiliyor: "Müşteriye Gönder" / "Gönder" / "E-posta Gönder".
+    // Bazi modullerde (Gider Pusulası) modal SADECE onizleme; gonder butonu YOK -> hizli-fail.
+    const gonderBtn = this.page
       .locator('.modal.show, modal-container, .swal2-popup')
-      .getByRole('button', { name: /Müşteriye Gönder/i })
-      .first()
-      .click();
+      .getByRole('button', { name: /Gönder/i })
+      .first();
+    if (!(await gonderBtn.isVisible({ timeout: 6000 }).catch(() => false))) {
+      return false; // modalda gonder yok -> gonderim bu modaldan yapilmiyor
+    }
+    await gonderBtn.click().catch(() => {});
     await this.page.waitForTimeout(1500);
     for (const label of [/^Evet$/i, /^Onayla$/i, /^Gönder$/i, /^Tamam$/i]) {
       const btn = this.page.locator('.modal.show, modal-container, .swal2-actions').getByRole('button', { name: label }).first();
@@ -222,17 +305,28 @@ export class BelgePage {
 
   // ---------- Giden liste (durum / "tamamlandı") ----------
 
-  /** Giden listesini acar ve genis tarih araligiyla filtreler (pill tiklamasi flaky -> retry). */
+  /**
+   * Giden listesini acar, genis tarih araligiyla (This month) filtreler.
+   * FLAKY nokta: "Filtrele"nin ustune "Press the filter button to list the results" info
+   * toast'i biniyordu -> filtre UYGULANMADAN kayitSayisi 0 okunup poll timeout'a giriyordu.
+   * Cozum: Filtrele'yi force tikla, sonucun OTURMASINI bekle = "X Kayıt" sayaci gorunur VE
+   * "Press the filter button" uyarisi kaybolur (filtre gercekten calisti demek). Kayit 0 bile
+   * olsa (yeni belge henuz propagate olmadi) dono; propagation'i distaki yeniKayitBekle poller.
+   */
   async gotoGidenVeFiltrele(gidenRoute: string) {
     await this.goto(gidenRoute);
-    for (let deneme = 0; deneme < 3; deneme++) {
-      const pill = this.page.getByText(deneme === 0 ? 'This month' : 'Last 30 days', { exact: true }).first();
+    await this.dismissCookieBanner();
+    for (let deneme = 0; deneme < 4; deneme++) {
+      const pill = this.page.getByText('This month', { exact: true }).first();
       if (await pill.isVisible().catch(() => false)) await pill.click().catch(() => {});
-      await this.page.waitForTimeout(500);
-      await this.page.getByRole('button', { name: /^Filtrele$/i }).click().catch(() => {});
+      await this.page.waitForTimeout(400);
+      await this.page.getByRole('button', { name: /^Filtrele$/i }).first().click({ force: true }).catch(() => {});
       await this.page.waitForLoadState('networkidle').catch(() => {});
-      await this.page.waitForTimeout(1200);
-      if ((await this.kayitSayisi()) > 0) return;
+      await this.page.waitForTimeout(1500); // grid render: anlik "0 Kayıt" -> gercek sayi otursun
+      // "Press the filter button" toast'i HALA varsa Filtrele islememis -> tekrar dene.
+      // Yoksa filtre uygulandi (kayit 0 bile olsa dono; propagation'i disardaki yeniKayitBekle poller).
+      const toastVar = await this.page.getByText(/Press the filter button/i).first().isVisible().catch(() => false);
+      if (!toastVar) return;
     }
   }
 

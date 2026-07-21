@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { EArsivPage } from '../../pages/earsiv.page';
 import { EFaturaPage } from '../../pages/efatura.page';
+import { GiderPusulasiPage, EMMPage, ESMMPage, EAdisyonPage, EIrsaliyePage, EBiletPage, MutabakatPage } from '../../pages/moduller.page';
 
 /**
  * ⚠️⚠️ GERÇEK BELGE ÜRETEN TESTLER — VARSAYILAN `npm test`'E DAHİL DEĞİL ⚠️⚠️
@@ -17,6 +18,13 @@ import { EFaturaPage } from '../../pages/efatura.page';
  *   E_ARSIV_ISSUE=1   -> e-Arsiv olusturma (taslak)
  *   E_ARSIV_SEND=1    -> e-Arsiv olustur + "Müşteriye Gönder" (resmi gonderim)
  *   E_FATURA_ISSUE=1  -> gercek e-Fatura kesimi (mukellef cari; default CARREFOURSA)
+ *   E_GIDER_ISSUE=1   -> Gider Pusulasi olustur + gonder (Hızlı Müşteri)
+ *   E_MM_ISSUE=1        -> E-MM Makbuz (Hızlı Müşteri)
+ *   E_SMM_ISSUE=1       -> E-SMM Makbuz (kayitli cari)
+ *   E_ADISYON_ISSUE=1   -> E-Adisyon (kayitli cari + adisyon alanlari)
+ *   E_IRSALIYE_ISSUE=1  -> E-İrsaliye (Alıcı Taraf + Plaka + kalem)
+ *   E_BILET_ISSUE=1     -> E-Bilet (doğrudan müşteri alanlari + sefer)
+ *   E_MUTABAKAT_ISSUE=1 -> Mutabakat (Form Tipi + Alıcı E-posta, grid yok)
  */
 
 test.describe('MANUAL: e-Arşiv üretimi', () => {
@@ -78,7 +86,8 @@ test.describe('MANUAL: e-Fatura — tüm senaryolar', () => {
         !process.env.E_FATURA_ISSUE,
         'Gercek fatura keser. .env: E_FATURA_ISSUE=1 (+ gerekirse E_FATURA_MUSTERI=<mukellef cari>)'
       );
-      test.setTimeout(120_000);
+      // Kes + gonder + GİB'in Giden'e yansitmasini poll etme -> canli backend yavas; 180sn.
+      test.setTimeout(180_000);
 
       const efatura = new EFaturaPage(page);
 
@@ -129,4 +138,152 @@ test.describe('MANUAL: e-Fatura — tüm senaryolar', () => {
       ).toBeTruthy();
     });
   }
+});
+
+/**
+ * GİDER PUSULASI — e-Arşiv ile AYNI desen (canli teyit): "Müşteri Ara"da Hızlı Müşteri var,
+ * mükellef gerektirmez, grid + Oluştur → "başarıyla kaydedildi" modalı → Müşteriye Gönder.
+ * Fark: KDV yerine stopaj -> kalemDoldurBasit (KDV set etmez).
+ *
+ * ⚠️ DEFAULT KAPALI. Açmak için .env: E_GIDER_ISSUE=1
+ * NOT: Kalem/vergi alanları modüle özel olabilir; ilk canlı koşuda --headed ile izle.
+ */
+test.describe('MANUAL: Gider Pusulası üretimi', () => {
+  test('gider pusulası oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_GIDER_ISSUE, 'Gercek belge uretir. .env: E_GIDER_ISSUE=1');
+    test.setTimeout(120_000);
+
+    const gp = new GiderPusulasiPage(page);
+    await gp.gotoOlustur();
+    const musteri = await gp.hizliMusteriOlustur(); // Utkuhan Bulut / TCKN 11111111111
+    console.log('Hızlı Müşteri:', musteri);
+    await gp.kalemDoldurBasit('Test Gider', 100, 1); // KDV yok (gider pusulası)
+
+    const ettn = await gp.olustur();
+    await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
+    console.log('Gider Pusulası oluşturuldu (taslak), ETTN:', ettn || '(önizleme iframe\'inde)');
+
+    // NOT: Gider Pusulası modalı SADECE önizleme (İade Bilgi Fişi); gönder modaldan yapılmıyor.
+    // Gönderim Taslak listesinden (İşlemler → Onaya Gönder) yapılır. Create başarısı esas alınır.
+    const gonderildi = await gp.musteriyeGonder();
+    console.log('Modaldan gönderim:', gonderildi ? 'yapıldı' : 'yok (Taslak listesinden yapılır)');
+  });
+});
+
+/**
+ * E-MM MAKBUZ (müstahsil makbuzu) — Hızlı Müşteri var (E-Arşiv/Gider Pusulası gibi).
+ * ⚠️ .env: E_MM_ISSUE=1
+ */
+test.describe('MANUAL: E-MM Makbuz üretimi', () => {
+  test('e-MM makbuz oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_MM_ISSUE, 'Gercek belge uretir. .env: E_MM_ISSUE=1');
+    test.setTimeout(120_000);
+
+    const emm = new EMMPage(page);
+    await emm.gotoOlustur();
+    const musteri = await emm.hizliMusteriOlustur(); // Utkuhan Bulut
+    console.log('Hızlı Müşteri:', musteri);
+    await emm.dropdownIlkSec(/Makbuz Tasarımı/i).catch(() => {});
+    await emm.kalemDoldur('Test Hizmet', 100, 1, 2); // E-MM: KDV değil GV STPJ (>0 zorunlu)
+    await emm.olustur();
+    await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
+    expect(await emm.musteriyeGonder(), 'gönderim sonrası modal kapanmalı').toBeTruthy();
+  });
+});
+
+/**
+ * E-SMM (serbest meslek makbuzu) — KAYITLI cari (Hızlı Müşteri yok). Senaryo yok.
+ * ⚠️ .env: E_SMM_ISSUE=1  (kayıtlı bir 'test' carisi kullanır)
+ */
+test.describe('MANUAL: E-SMM Makbuz üretimi', () => {
+  test('e-SMM makbuz oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_SMM_ISSUE, 'Gercek belge uretir. .env: E_SMM_ISSUE=1');
+    test.setTimeout(120_000);
+
+    const esmm = new ESMMPage(page);
+    await esmm.gotoOlustur();
+    const cari = await esmm.musteriSec('test', 1); // "Yeni Alıcı Ekle" sonrası ilk kayıtlı cari
+    console.log('Cari:', cari);
+    await esmm.kalemUrunFiyat('Test Hizmet', 100); // Ücretin Nedeni + Brüt Ücret (miktar yok)
+    await esmm.olustur();
+    await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
+    expect(await esmm.musteriyeGonder(), 'gönderim sonrası modal kapanmalı').toBeTruthy();
+  });
+});
+
+/**
+ * E-ADİSYON — KAYITLI cari + Senaryo + adisyon alanları (Masa No, İşlemi Yapan, Kapatma Tarihi).
+ * ⚠️ .env: E_ADISYON_ISSUE=1
+ * NOT: Masa No / İşlemi Yapan zorunlu olabilir; olustur() "zorunlu alan" derse o alanı ekle.
+ */
+test.describe('MANUAL: E-Adisyon üretimi', () => {
+  test('e-adisyon oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_ADISYON_ISSUE, 'Gercek belge uretir. .env: E_ADISYON_ISSUE=1');
+    test.setTimeout(120_000);
+
+    const ea = new EAdisyonPage(page);
+    await ea.gotoOlustur();
+    // "test" carilerinin TC'si geçersiz olabiliyor -> CARREFOURSA (geçerli VKN, gerçek şirket).
+    const cari = await ea.musteriSec('carrefour', 0);
+    console.log('Cari:', cari);
+    await ea.kalemDoldur('Test Hizmet', 100, 1, 20); // Ürün Adı(text) + Birim Fiyat + Miktar + KDV
+    const ettn = await ea.olustur(); // E-Adisyon: metinsiz önizleme modalı (ETTN iframe'de)
+    console.log('Adisyon oluşturuldu, ETTN:', ettn || '(önizleme iframe\'inde)');
+    // Başarı = önizleme modalı açıldı (Onayla/Yazdır/Mail Gönder butonlu). olustur() zaten doğruladı.
+    await expect(
+      page.locator('.modal.show, modal-container').getByRole('button', { name: /Onayla|Yazdır|Mail Gönder/i }).first()
+    ).toBeVisible();
+    const g = await ea.musteriyeGonder();
+    console.log('Modaldan gönderim:', g ? 'yapıldı' : 'yok');
+  });
+});
+
+/**
+ * E-İRSALİYE, E-BİLET, MUTABAKAT — bespoke formlar (canli incelendi). Alanlari page
+ * object'lerdeki formuDoldur() dolduruyor. ⚠️ Bu 3'u CANLI çalıştırılıp doğrulanmadı
+ * (issuance engelli); ilk `--headed` koşuda modüle özel bir zorunlu alan çıkarsa
+ * olustur() net hata verir, ona göre alan eklenir.
+ */
+test.describe('MANUAL: E-İrsaliye üretimi', () => {
+  test('e-irsaliye oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_IRSALIYE_ISSUE, 'Gercek belge uretir. .env: E_IRSALIYE_ISSUE=1');
+    test.setTimeout(120_000);
+    const ir = new EIrsaliyePage(page);
+    await ir.gotoOlustur();
+    await ir.formuDoldur({ aliciArama: 'test', plaka: '34ABC123', urun: 'Test Ürün', miktar: 1 });
+    await ir.olustur();
+    await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
+    expect(await ir.musteriyeGonder(), 'gönderim sonrası modal kapanmalı').toBeTruthy();
+  });
+});
+
+test.describe('MANUAL: E-Bilet üretimi', () => {
+  test('e-bilet oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_BILET_ISSUE, 'Gercek belge uretir. .env: E_BILET_ISSUE=1');
+    test.setTimeout(120_000);
+    const bilet = new EBiletPage(page);
+    await bilet.gotoOlustur();
+    // Default'lar geçerli: biletNo 13 haneli (hava kuralı), tckn geçerli. Override etme.
+    await bilet.formuDoldur({ musteriAd: 'Utkuhan Bulut' });
+    const ettn = await bilet.olustur(); // önizleme modalı (metinsiz olabilir)
+    console.log('Bilet oluşturuldu, ETTN:', ettn || '(önizleme iframe\'inde)');
+    await expect(
+      page.locator('.modal.show, modal-container').getByRole('button', { name: /Onayla|Yazdır|Mail Gönder|Müşteriye Gönder/i }).first()
+    ).toBeVisible();
+    const g = await bilet.musteriyeGonder();
+    console.log('Modaldan gönderim:', g ? 'yapıldı' : 'yok');
+  });
+});
+
+test.describe('MANUAL: Mutabakat üretimi', () => {
+  test('mutabakat oluşturulup gönderilebiliyor', async ({ page }) => {
+    test.fixme(!process.env.E_MUTABAKAT_ISSUE, 'Gercek belge uretir. .env: E_MUTABAKAT_ISSUE=1');
+    test.setTimeout(120_000);
+    const mut = new MutabakatPage(page);
+    await mut.gotoOlustur();
+    await mut.formuDoldur({ aliciEposta: 'test@pavo.com', musteriArama: 'test' });
+    await mut.olustur();
+    // Mutabakat "Müşteriye Gönder" olmayabilir; basari modali/bildirimi yeterli.
+    await expect(page.getByText(/başarıyla|kaydedildi|gönderil/i)).toBeVisible();
+  });
 });

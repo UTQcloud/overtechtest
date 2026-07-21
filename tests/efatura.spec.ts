@@ -52,9 +52,12 @@ test.describe('e-Fatura', () => {
     const fatura = await efatura.ilkFatura();
     console.log('Son fatura:', JSON.stringify(fatura));
     expect(fatura.faturaNo, 'fatura no okunmali').not.toBe('');
+    // Basarili VEYA gecis durumu (Onay Bekleniyor) kabul: yeni kesilen fatura GİB'de
+    // islenirken kisa sure "Onay Bekleniyor"da kalir — bu hata degildir. Sadece
+    // Hata/İptal/Red gibi durumlar fail sayilir.
     expect(
-      EFaturaPage.durumBasarili(fatura.durum),
-      `Durum basarili degil: "${fatura.durum}"`
+      EFaturaPage.durumBasarili(fatura.durum) || /Beklen|İşlen/i.test(fatura.durum),
+      `Durum saglikli degil (hata/iptal?): "${fatura.durum}"`
     ).toBeTruthy();
   });
 

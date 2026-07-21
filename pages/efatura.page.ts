@@ -83,13 +83,4 @@ export class EFaturaPage extends BelgePage {
     if (data.not) await this.page.locator('textarea').first().fill(data.not);
     return secilen;
   }
-
-  /** Maskeli/Kendo tarih inputu: fill() calismaz, tus tus yaz. */
-  async fillDate(selector: string, value: string) {
-    const input = this.page.locator(selector).first();
-    await input.click();
-    await input.press('Control+a');
-    await input.pressSequentially(value, { delay: 50 });
-    await input.press('Escape');
-  }
 }
