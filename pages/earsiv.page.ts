@@ -136,9 +136,11 @@ export class EArsivPage {
   /**
    * Basari modalindeki "Müşteriye Gönder" butonuyla faturayi RESMEN gonderir.
    * ⚠️ Gercek GİB gonderimi (yasal). Otomatik ajan CALISTIRAMAZ; E_ARSIV_SEND ile gated.
-   * Gonderim sonrasi cikan bildirim/modal metnini dondurur (dogrulama icin).
+   *
+   * Basari sinyali: gonderim islenince "başarıyla kaydedildi" MODALI KAPANIR ve form
+   * sifirlanir (kalici bir toast YOK). Modal kapandiysa true doner.
    */
-  async musteriyeGonder(): Promise<string> {
+  async musteriyeGonder(): Promise<boolean> {
     await this.dismissCookieBanner(); // banner "Müşteriye Gönder"i de kapatabiliyor
     await this.page
       .locator('.modal.show, modal-container, .swal2-popup')
@@ -146,6 +148,7 @@ export class EArsivPage {
       .first()
       .click();
     await this.page.waitForTimeout(1500);
+    // Olasi onay ("Emin misiniz?" vb.)
     for (const label of [/^Evet$/i, /^Onayla$/i, /^Gönder$/i, /^Tamam$/i]) {
       const btn = this.page.locator('.modal.show, modal-container, .swal2-actions').getByRole('button', { name: label }).first();
       if (await btn.isVisible().catch(() => false)) {
@@ -154,13 +157,10 @@ export class EArsivPage {
         break;
       }
     }
-    await this.page.waitForTimeout(1500);
-    const parcalar = await this.page
-      .locator('.k-notification, .toast, .swal2-title, .swal2-html-container, .modal.show')
-      .allTextContents()
-      .catch(() => []);
+    // Basari = "başarıyla kaydedildi" modali kapandi (form resetlendi).
+    await this.page.getByText(/başarıyla kaydedildi/i).first().waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
     await this.page.waitForLoadState('networkidle').catch(() => {});
-    return [...new Set(parcalar.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean))].join(' | ').slice(0, 200);
+    return !(await this.page.getByText(/başarıyla kaydedildi/i).first().isVisible().catch(() => false));
   }
 
   async dismissCookieBanner() {

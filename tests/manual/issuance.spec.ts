@@ -49,14 +49,11 @@ test.describe('MANUAL: e-Arşiv üretimi', () => {
     await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
     console.log('Taslak kaydedildi, ETTN:', ettn || '(önizleme iframe\'inde)');
 
-    // Müşteriye Gönder -> gonderim sonucu sinyalini dogrula (taslaktaYok sabit isimle
-    // guvenilmez cunku ayni "Utkuhan Bulut" birden fazla kez olusabiliyor).
-    const gonderimSonucu = await earsiv.musteriyeGonder();
-    console.log('GÖNDERİM SONUCU:', gonderimSonucu || '(bildirim yakalanamadi)');
-    expect(
-      /başarı|gönderil|iletildi|kaydedildi|kabul/i.test(gonderimSonucu),
-      `Gönderim başarı sinyali beklenir, gelen: "${gonderimSonucu}"`
-    ).toBeTruthy();
+    // Müşteriye Gönder -> başarı sinyali = "başarıyla kaydedildi" modalı KAPANIR
+    // (kalıcı toast yok, form resetlenir). taslaktaYok sabit isimle güvenilmezdi.
+    const gonderildi = await earsiv.musteriyeGonder();
+    console.log('GÖNDERİM işlendi mi (modal kapandı):', gonderildi);
+    expect(gonderildi, 'Müşteriye Gönder sonrası başarı modalı kapanmalı (gönderim işlendi)').toBeTruthy();
   });
 });
 
