@@ -1,0 +1,21 @@
+{
+  "name": "overed-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:safe": "playwright test --project=chromium",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "debug": "playwright test --project=chromium --debug",
+    "test:issue": "playwright test --project=issuance --headed",
+    "codegen": "playwright codegen https://overed.overtech.com.tr",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0",
+    "@types/node": "^22.0.0",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.6.0"
+  }
+}
