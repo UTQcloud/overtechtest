@@ -26,7 +26,6 @@ import { Page, expect } from '@playwright/test';
 export class EArsivPage {
   readonly page: Page;
   static readonly ROUTE = '/EArchive/CreateArchiveInvoice/Index';
-  static readonly TASLAK = '/EArchive/DraftEArchiveInvoice/Index';
 
   constructor(page: Page) {
     this.page = page;
@@ -107,6 +106,8 @@ export class EArsivPage {
    * Hata olursa kirmizi bildirimi firlatir. Modaldeki ETTN'yi dondurur.
    */
   async olustur(): Promise<string> {
+    // Cookie bandi "Oluştur" butonunun ustune binip tiklamayi engelliyor -> once kapat.
+    await this.dismissCookieBanner();
     await this.page.locator('button.btn-lg:has-text("Oluştur")').first().click();
 
     // "Fatura taslak olarak başarıyla kaydedildi" -> INVOICE modali (musteri toast'i
@@ -135,8 +136,10 @@ export class EArsivPage {
   /**
    * Basari modalindeki "Müşteriye Gönder" butonuyla faturayi RESMEN gonderir.
    * ⚠️ Gercek GİB gonderimi (yasal). Otomatik ajan CALISTIRAMAZ; E_ARSIV_SEND ile gated.
+   * Gonderim sonrasi cikan bildirim/modal metnini dondurur (dogrulama icin).
    */
-  async musteriyeGonder() {
+  async musteriyeGonder(): Promise<string> {
+    await this.dismissCookieBanner(); // banner "Müşteriye Gönder"i de kapatabiliyor
     await this.page
       .locator('.modal.show, modal-container, .swal2-popup')
       .getByRole('button', { name: /Müşteriye Gönder/i })
@@ -151,29 +154,13 @@ export class EArsivPage {
         break;
       }
     }
+    await this.page.waitForTimeout(1500);
+    const parcalar = await this.page
+      .locator('.k-notification, .toast, .swal2-title, .swal2-html-container, .modal.show')
+      .allTextContents()
+      .catch(() => []);
     await this.page.waitForLoadState('networkidle').catch(() => {});
-  }
-
-  /** Verilen musteri artik Taslak'ta DEGIL mi? (Müşteriye Gönder sonrasi dogrulama) */
-  async taslaktaYok(musteriAdi: string): Promise<boolean> {
-    await this.page.goto(EArsivPage.TASLAK, { waitUntil: 'networkidle' });
-    await this.dismissCookieBanner();
-    for (const label of ['This month', 'Last 30 days']) {
-      const el = this.page.getByText(label, { exact: true }).first();
-      if (await el.isVisible().catch(() => false)) {
-        await el.click().catch(() => {});
-        break;
-      }
-    }
-    await this.page.waitForTimeout(400);
-    await this.page.getByRole('button', { name: /^Filtrele$/i }).click().catch(() => {});
-    await this.page.waitForTimeout(2000);
-    return (
-      (await this.page
-        .locator('.k-grid-content tbody tr, .k-grid tbody tr')
-        .filter({ hasText: musteriAdi })
-        .count()) === 0
-    );
+    return [...new Set(parcalar.map((t) => t.replace(/\s+/g, ' ').trim()).filter(Boolean))].join(' | ').slice(0, 200);
   }
 
   async dismissCookieBanner() {

@@ -281,6 +281,8 @@ export class EFaturaPage {
    * Basari modali gorunmezse / hata cikarsa firlatir. Modaldeki ETTN'yi doner.
    */
   async olustur(): Promise<string> {
+    // Cookie bandi "Oluştur" butonunu kapatabiliyor -> once kapat.
+    await this.dismissCookieBanner();
     await this.page.getByRole('button', { name: /^Oluştur$/i }).first().click();
     const basariModal = this.page.getByText(/başarıyla kaydedildi/i).first();
     const hata = this.page
