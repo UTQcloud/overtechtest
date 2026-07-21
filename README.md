@@ -80,6 +80,3 @@ Akış: form doldur → **Oluştur** (taslak, "başarıyla kaydedildi" modalı) 
 | e-Arşiv "valid first and last name" | Ad/soyad rakam/"Test" içeremez; gerçek isim ver |
 | e-Fatura "zorunlu alan (Fatura Tipi)" | Senaryo değişince Fatura Tipi seçilmeli (form otomatik yapar) |
 
-## Not (QA bulgusu)
-
-Test hesabı şifresi `12345` — zayıf. Şifre `.env`'de, repoya asla commit etme.
