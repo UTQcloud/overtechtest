@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { BelgePage } from './belge.page';
 
 /**
@@ -72,14 +73,14 @@ export class EIrsaliyePage extends BelgePage {
     const gridBody = (rx: RegExp | string) =>
       this.page.locator('kendo-grid', { has: this.page.getByText(rx) }).first()
         .locator('.k-grid-content input, tbody input');
-    const setCell = async (loc: import('@playwright/test').Locator, val: string) => {
+    const setCell = async (loc: Locator, val: string) => {
       await loc.click();
       await loc.fill(val);
       await loc.press('Tab'); // Kendo change event'ini tetikle
     };
     // Kendo grid metin hucreleri (Sürücü Ad/Soyadı) .fill() ile Angular model'e commit OLMUYOR
     // (validasyon "Sürücü Bilgileri *" bos sayiyor). Gercek klavye tuslamasi + blur ile yaz.
-    const typeCell = async (loc: import('@playwright/test').Locator, val: string) => {
+    const typeCell = async (loc: Locator, val: string) => {
       await loc.click();
       await this.page.keyboard.press('Control+a');
       await this.page.keyboard.type(val, { delay: 40 });
