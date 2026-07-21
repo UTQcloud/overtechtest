@@ -71,12 +71,3 @@ Akış: form doldur → **Oluştur** (taslak, "başarıyla kaydedildi" modalı) 
 - **Kendo UI:** input id'leri değişken → seçiciler görünür etiket/pozisyona göre yazıldı.
 - **Durum ("tamamlandı"):** Onay Bekleniyor → Gönderilmiş → Müşteriye Ulaştı.
 
-## Sorun giderme
-
-| Belirti | Çözüm |
-|---|---|
-| Testler `/login`'e düşüyor | `playwright/.auth/user.json` sil, tekrar çalıştır |
-| Seçici bulunamadı (ekran değişti) | `npm run codegen` ile al, `pages/*.page.ts` güncelle |
-| e-Arşiv "valid first and last name" | Ad/soyad rakam/"Test" içeremez; gerçek isim ver |
-| e-Fatura "zorunlu alan (Fatura Tipi)" | Senaryo değişince Fatura Tipi seçilmeli (form otomatik yapar) |
-
