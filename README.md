@@ -10,13 +10,7 @@ npm install
 npx playwright install chromium
 ```
 
-`.env` (repoya girmez):
 
-```
-BASE_URL=https://overed.overtech.com.tr
-PORTAL_USER=artiyazilim
-PORTAL_PASS=12345
-```
 
 ## Komutlar
 
