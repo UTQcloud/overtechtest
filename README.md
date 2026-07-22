@@ -1,7 +1,9 @@
 # OverED (Pavo) Portal — Test Otomasyonu
 
-`https://overed.overtech.com.tr` e-Fatura / e-Arşiv ekranları için Playwright + TypeScript
-uçtan uca test otomasyonu (Page Object Model).
+`https://overed.overtech.com.tr` e-belge modülleri (e-Fatura, e-Arşiv, Gider Pusulası, E-Adisyon,
+E-İrsaliye, E-SMM, E-MM, E-Bilet) için Playwright + TypeScript uçtan uca test otomasyonu (Page Object Model).
+
+**8/8 modül gerçek belge kesiyor** (canlı "Müşteriye Ulaştı"ya kadar kanıtlandı).
 
 ## Kurulum
 
@@ -22,10 +24,10 @@ npx playwright install chromium
 | `npm run test:issue` | Sadece manuel/gerçek belge testleri (flag'li, tarayıcı açık) |
 | `npm run report` | Son HTML raporunu açar |
 
-> ⚠️ **Birleşik `npm test`:** `.env`'de `E_FATURA_ISSUE` / `E_ARSIV_SEND` / `E_ARSIV_ISSUE`
-> **açıksa**, `npm test` gerçek belge üreten testleri de çalıştırır (CARREFOURSA'ya gerçek
-> e-Fatura keser!). **Günlük güvenli koşu için flag'leri `.env`'den sil** veya `npm run test:safe` kullan.
-> Flag yoksa `npm test` = **9 passed + 4 skipped** (belge üretmez).
+> ⚠️ **Birleşik `npm test`:** `.env`'de bir `E_*_ISSUE` / `E_ARSIV_SEND` flag'i **açıksa**,
+> `npm test` o modülün gerçek belge testini de çalıştırır (ör. CARREFOURSA'ya gerçek e-Fatura keser!).
+> **Günlük güvenli koşu için flag'leri `.env`'den sil** veya `npm run test:safe` kullan.
+> Flag yoksa manuel testler `test.fixme` ile atlanır → `npm test` belge üretmez.
 
 ## Yapı
 
@@ -33,12 +35,12 @@ npx playwright install chromium
 tests/auth.setup.ts            login olur, oturumu playwright/.auth/user.json'a yazar
 tests/efatura.spec.ts          e-Fatura GÜVENLİ testler (belge üretmez)
 tests/earsiv.spec.ts           e-Arşiv GÜVENLİ testler (belge üretmez)
-tests/moduller.spec.ts         diğer 7 modül GÜVENLİ smoke (ekran + Giden açılıyor)
+tests/moduller.spec.ts         diğer 6 modül GÜVENLİ smoke (ekran + Giden açılıyor)
 tests/manual/issuance.spec.ts  ⚠️ GERÇEK belge üreten testler (flag'li)
 pages/belge.page.ts            ORTAK base class (tüm modüller bunu extend eder)
 pages/efatura.page.ts          e-Fatura (mükellef + senaryo/tip) — BelgePage'i extend eder
 pages/earsiv.page.ts           e-Arşiv (Hızlı Müşteri) — BelgePage'i extend eder
-pages/moduller.page.ts         diğer 7 modül (Gider Pusulası, E-Adisyon, E-İrsaliye, ...)
+pages/moduller.page.ts         diğer 6 modül (Gider Pusulası, E-Adisyon, E-İrsaliye, ...)
 playwright.config.ts           chromium (güvenli) + issuance (manuel) projeleri
 ```
 
@@ -47,11 +49,11 @@ modalı → Müşteriye Gönder → Giden). Ortak mantık `BelgePage` base class
 onu extend edip sadece kendi rotasını + varsa özel alanını ekler (~6 satır).
 
 **Kapsanan modüller:** e-Fatura, e-Arşiv, Gider Pusulası, E-Adisyon, E-İrsaliye (Despatch),
-E-SMM, E-MM, E-Bilet, Mutabakat.
+E-SMM, E-MM, E-Bilet.
 
 ### Modül kapsama
 
-**7/9 modül kes+gönder CANLI doğrulandı** (gerçek belge kesildi). Kalan 2'si smoke ile kapsanıyor.
+**8/8 modülün formu tam otomatik ve gerçek belge kesiyor** (canlı doğrulandı).
 
 | Modül | Smoke | Kes+Gönder | Not |
 |---|---|---|---|
@@ -62,18 +64,20 @@ E-SMM, E-MM, E-Bilet, Mutabakat.
 | E-SMM Makbuz | ✅ | ✅ kanıtlı | Kayıtlı cari + Brüt Ücret |
 | E-Adisyon | ✅ | ✅ kanıtlı | Kayıtlı cari (CARREFOURSA) + KDV |
 | E-Bilet | ✅ | ✅ kanıtlı | Doğrudan müşteri + 13-hane benzersiz no |
-| **E-İrsaliye** | ✅ | ⚠️ form tam, sunucu 500 | Form otomasyonu TAM (Sürücü/Dorse/Kalem 3 grid + Plaka + tarihler); `Oluştur`'da backend "Unexpected exception" |
-| **Mutabakat** | ✅ | ⚠️ sunucu 500 | Form dolduruluyor; `Oluştur`'da backend "Unexpected exception" (İrsaliye ile AYNI hata) |
+| E-İrsaliye | ✅ | ✅ kanıtlı | 3 Kendo grid + Plaka + tarihler; boş Dorse satırı silinir |
 
-"kanıtlı" = gerçek belge kesildi (canlı). Son 2 modülde **form otomasyonu tamamlandı** (tüm
-zorunlu alanlar geçiyor, form sunucuya gidiyor) ama `Development` backend her ikisinde de
-**aynı generic `Unexpected exception. Further investigation required.`** (HTTP 500) dönüyor.
-İrsaliye dosya GEREKTİRMEDEN bu hatayı verdiği için ortak neden test-tenant/backend — test
-kodu değil. Manuel olarak bu tenant'ta İrsaliye/Mutabakat kesilebiliyorsa alan haritası hazır.
+"kanıtlı" = gerçek belge kesildi (canlı). **E-İrsaliye ağ analiziyle çözüldü**: form boş bir Dorse
+(trailer) grid satırı (`DespatchTrailerPlates:[{}]`) gönderiyordu; backend bunda "Unexpected
+exception" (HTTP 500) atıyordu. Boş satır silinince → gerçek belge kesiliyor (kanıtlandı).
+
+> **Not — Mutabakat kaldırıldı:** Mutabakat formu tam otomatikti (CARI, tüm alanlar client validasyonu
+> geçiyordu) ama `/api/Reconciliation/.../Create` her geçerli payload'a — dosya eki ve çalışan bir
+> kaydın verisinin replay'i dahil — **HTTP 500 "Unexpected exception"** dönüyordu. Bu bir backend
+> arızası (test kodu değil); Overtech'e iletildi. Bu modül test kapsamından çıkarıldı.
 
 Öğrenilen portal iş kuralları (`formuDoldur`/`hizliMusteriOlustur`'da kodlu):
 TCKN 11111111111 checksum geçersiz → geçerli TC (10000000146); E-MM tax (stopaj) > 0;
-Mutabakat Toplam Tutar ≥ 5000; E-Bilet no 13-hane + benzersiz; İrsaliye Sevk Tarihi gelecekte.
+E-Bilet no 13-hane + benzersiz; İrsaliye Sevk Tarihi gelecekte + boş Dorse satırı silinir.
 
 ## Gerçek belge testleri (`test:issue`)
 

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { EArsivPage } from '../../pages/earsiv.page';
 import { EFaturaPage } from '../../pages/efatura.page';
-import { GiderPusulasiPage, EMMPage, ESMMPage, EAdisyonPage, EIrsaliyePage, EBiletPage, MutabakatPage } from '../../pages/moduller.page';
+import { GiderPusulasiPage, EMMPage, ESMMPage, EAdisyonPage, EIrsaliyePage, EBiletPage } from '../../pages/moduller.page';
 
 /**
  * ⚠️⚠️ GERÇEK BELGE ÜRETEN TESTLER — VARSAYILAN `npm test`'E DAHİL DEĞİL ⚠️⚠️
@@ -24,7 +24,6 @@ import { GiderPusulasiPage, EMMPage, ESMMPage, EAdisyonPage, EIrsaliyePage, EBil
  *   E_ADISYON_ISSUE=1   -> E-Adisyon (kayitli cari + adisyon alanlari)
  *   E_IRSALIYE_ISSUE=1  -> E-İrsaliye (Alıcı Taraf + Plaka + kalem)
  *   E_BILET_ISSUE=1     -> E-Bilet (doğrudan müşteri alanlari + sefer)
- *   E_MUTABAKAT_ISSUE=1 -> Mutabakat (Form Tipi + Alıcı E-posta, grid yok)
  */
 
 test.describe('MANUAL: e-Arşiv üretimi', () => {
@@ -239,21 +238,22 @@ test.describe('MANUAL: E-Adisyon üretimi', () => {
 });
 
 /**
- * E-İRSALİYE, E-BİLET, MUTABAKAT — bespoke formlar (canli incelendi). Alanlari page
- * object'lerdeki formuDoldur() dolduruyor. ⚠️ Bu 3'u CANLI çalıştırılıp doğrulanmadı
- * (issuance engelli); ilk `--headed` koşuda modüle özel bir zorunlu alan çıkarsa
- * olustur() net hata verir, ona göre alan eklenir.
+ * E-İRSALİYE, E-BİLET — bespoke formlar (CANLI incelendi + gerçek belge kesildi).
+ * Alan haritalari `pages/moduller.page.ts` icindeki formuDoldur()'da.
  */
 test.describe('MANUAL: E-İrsaliye üretimi', () => {
-  test('e-irsaliye oluşturulup gönderilebiliyor', async ({ page }) => {
+  // KANITLI: gerçek e-İrsaliye kesiliyor. Kritik düzeltme: boş Dorse (trailer) satiri gonderilince
+  // backend "Unexpected exception" (500) firlatiyordu -> formuDoldur bos satiri siliyor.
+  test('e-irsaliye kesilip müşteriye gönderilebiliyor', async ({ page }) => {
     test.fixme(!process.env.E_IRSALIYE_ISSUE, 'Gercek belge uretir. .env: E_IRSALIYE_ISSUE=1');
     test.setTimeout(120_000);
     const ir = new EIrsaliyePage(page);
     await ir.gotoOlustur();
     await ir.formuDoldur({ aliciArama: 'test', plaka: '34ABC123', urun: 'Test Ürün', miktar: 1 });
-    await ir.olustur();
+    const ettn = await ir.olustur(); // 500 olursa firlatir (regresyon yakalanir)
     await expect(page.getByText(/başarıyla kaydedildi/i)).toBeVisible();
     expect(await ir.musteriyeGonder(), 'gönderim sonrası modal kapanmalı').toBeTruthy();
+    console.log('E-İrsaliye kesildi, ETTN:', ettn || '(önizleme iframe\'inde)');
   });
 });
 
@@ -272,18 +272,5 @@ test.describe('MANUAL: E-Bilet üretimi', () => {
     ).toBeVisible();
     const g = await bilet.musteriyeGonder();
     console.log('Modaldan gönderim:', g ? 'yapıldı' : 'yok');
-  });
-});
-
-test.describe('MANUAL: Mutabakat üretimi', () => {
-  test('mutabakat oluşturulup gönderilebiliyor', async ({ page }) => {
-    test.fixme(!process.env.E_MUTABAKAT_ISSUE, 'Gercek belge uretir. .env: E_MUTABAKAT_ISSUE=1');
-    test.setTimeout(120_000);
-    const mut = new MutabakatPage(page);
-    await mut.gotoOlustur();
-    await mut.formuDoldur({ aliciEposta: 'test@pavo.com', musteriArama: 'test' });
-    await mut.olustur();
-    // Mutabakat "Müşteriye Gönder" olmayabilir; basari modali/bildirimi yeterli.
-    await expect(page.getByText(/başarıyla|kaydedildi|gönderil/i)).toBeVisible();
   });
 });

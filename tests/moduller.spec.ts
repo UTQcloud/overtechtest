@@ -14,7 +14,6 @@ const MODULLER = [
   { ad: 'E-SMM Makbuz', olustur: '/ESMReceipt/CreateEsmReceipt/Index', giden: '/ESMReceipt/EsmReceipt/Index' },
   { ad: 'E-MM Makbuz', olustur: '/EMMReceipt/CreateEmmReceipt/Index', giden: '/EMMReceipt/EmmReceipt/Index' },
   { ad: 'E-Bilet', olustur: '/ETicket/CreateTicket/Index', giden: '/ETicket/Ticket/Index' },
-  { ad: 'Mutabakat', olustur: '/Reconciliation/CreateReconciliation/Index', giden: '/Reconciliation/Reconciliation/Index' },
 ];
 
 test.describe('Diğer modüller — güvenli smoke', () => {

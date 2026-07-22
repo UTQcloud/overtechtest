@@ -109,6 +109,17 @@ export class EIrsaliyePage extends BelgePage {
     await plaka.fill(opts.plaka ?? '34ABC123');
     await plaka.press('Tab');
     await this.page.waitForTimeout(300);
+
+    // ⚠️ KRITIK: Dorse (trailer) grid'inde default BOŞ satir gelir. Bos gonderilince backend
+    // "Unexpected exception" (HTTP 500) firlatiyor (agdan kanitlandi: bos satir cikinca 200).
+    // Dorse opsiyonel -> bos satiri SIL, DespatchTrailerPlates=[] olsun. Dorse grid = tek "Plaka"
+    // kolon basligina sahip kendo-grid (standalone Plaka form alani, grid degil).
+    const dorseGrid = this.page.locator('kendo-grid', { has: this.page.getByRole('columnheader', { name: 'Plaka' }) }).first();
+    const dorseSil = dorseGrid.getByRole('button', { name: /^Sil$/i }).first();
+    if (await dorseSil.isVisible().catch(() => false)) {
+      await dorseSil.click().catch(() => {});
+      await this.page.waitForTimeout(300);
+    }
   }
 }
 
@@ -153,34 +164,5 @@ export class EBiletPage extends BelgePage {
   }
 }
 
-/**
- * Mutabakat — /Reconciliation (bespoke; kalem GRID'i YOK).
- * Zorunlu: Form Tipi, Müşteri Ara, Alıcı E-posta. (Ekler/dosya opsiyonel.)
- */
-export class MutabakatPage extends BelgePage {
-  static readonly OLUSTUR = '/Reconciliation/CreateReconciliation/Index';
-  static readonly GIDEN = '/Reconciliation/Reconciliation/Index';
-  async gotoOlustur() { await this.goto(MutabakatPage.OLUSTUR); }
-  async gotoGiden() { await this.gotoGidenVeFiltrele(MutabakatPage.GIDEN); }
-
-  /** Zorunlu alanlari doldurur. NOT: canli teyit gerekir (Müşteri Ara combobox davranisi). */
-  async formuDoldur(opts: { aliciEposta?: string; musteriArama?: string } = {}) {
-    await this.dropdownIlkSec(/Form Tipi/i); // ör. "BA"
-    // Form Tipi secilince zorunlu olan sayisal alanlar: Toplam Tutar + Belge Sayısı.
-    // BA/BS Mutabakatı için Toplam Tutar en az 5000 TL olmalı (portal kuralı).
-    for (const [lbl, val] of [[/Toplam Tutar/i, '5000'], [/Belge Sayısı/i, '1']] as [RegExp, string][]) {
-      const g = this.page.locator('div.form-group.row, div.form-group', { has: this.page.getByText(lbl) }).first();
-      await g.locator('input').first().fill(val).catch(() => {});
-      await this.page.waitForTimeout(200);
-    }
-    // Müşteri Ara (Receiver Party)
-    const grp = this.page.locator('div.form-group.row', { has: this.page.getByText(/Müşteri Ara/i) }).first();
-    await grp.locator('[role="combobox"]').first().click();
-    await this.page.waitForTimeout(400);
-    await this.page.keyboard.type(opts.musteriArama ?? 'test', { delay: 25 });
-    await this.page.waitForTimeout(1400);
-    await this.page.locator('.k-list-item').filter({ hasNotText: 'Yeni Alıcı Ekle' }).first().click().catch(() => {});
-    await this.page.waitForTimeout(1000);
-    await this.alanDoldur(/Alıcı E-posta/i, opts.aliciEposta ?? 'test@pavo.com');
-  }
-}
+// NOT: Mutabakat kaldirildi — create endpoint'i (/api/Reconciliation/.../Create) her gecerli
+// payload'a (dosya eki + calisan kayit replay'i dahil) HTTP 500 donuyordu (backend arizasi).

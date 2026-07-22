@@ -2,7 +2,7 @@ import { Page, expect } from '@playwright/test';
 
 /**
  * OverED (Pavo) portalindaki TUM e-belge modulleri (e-Fatura, e-Arsiv, Gider Pusulasi,
- * e-Adisyon, e-Irsaliye, e-SMM, e-MM, e-Bilet, Mutabakat) ayni Kendo UI desenini paylasir:
+ * e-Adisyon, e-Irsaliye, e-SMM, e-MM, e-Bilet) ayni Kendo UI desenini paylasir:
  *
  *   Oluştur (form) -> "başarıyla kaydedildi" MODALI (taslak) -> Müşteriye Gönder (resmi) -> Giden
  *
@@ -231,7 +231,7 @@ export class BelgePage {
       .locator('.modal.show, modal-container, .swal2-popup')
       .getByRole('button', { name: /Müşteriye Gönder|Mail Gönder|Onayla|Yazdır|Yeni Fatura Oluştur/i })
       .first();
-    // Bazi moduller (Mutabakat) modal degil BASARI TOAST'i gosterir.
+    // Yedek: modal yerine BASARI TOAST'i gosteren bir modul olursa da yakala (genel guvence).
     const basariToast = this.page
       .locator('.k-notification-success, .toast-success, .k-notification, .toast')
       .filter({ hasText: /başarı|kaydedildi|olusturuldu|oluşturuldu|gönderildi/i })
